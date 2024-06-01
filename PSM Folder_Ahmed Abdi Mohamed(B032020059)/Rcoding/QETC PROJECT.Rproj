@@ -1,0 +1,223 @@
+# Read data for all years
+QETC2017_Admissions <- read_csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC2017 Admissions.csv")
+QETC_2016_Admission <- read_csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC 2016 Admission.csv")
+QETC2018_Addmissions <- read.csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC2018 Addmissions.csv")
+QETC2019_Admissions <- read.csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC2019 Admissions.csv")
+QETC2020_Admissions <- read.csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC2020 Admissions.csv")
+QETC2021_Admission <- read.csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC2021 Admission.csv")
+QETC_2022_Admmissions <- read.csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC 2022 Admmissions.csv")
+QETC_2023_Admissions_ <- read.csv("C:/Users/ahmed/Desktop/QETC- DATA/QETC 2023 Admissions .csv")
+
+# Combine all data into one data frame
+data2016clean <- na.omit(QETC_2016_Admission)
+data2017clean <- na.omit(QETC2017_Admissions)
+data2019clean <- na.omit(QETC2019_Admissions)
+data2018clean <- na.omit(QETC2018_Addmissions)
+data2020clean <- na.omit(QETC2020_Admissions)
+data2021clean <- na.omit(QETC2021_Admission)
+data2022clean <- na.omit(QETC_2022_Admmissions)
+data2023clean <- na.omit(QETC_2023_Admissions_)
+
+
+all_data <- bind_rows(
+  data2016clean,
+  data2017clean,
+  data2019clean,
+  data2022clean,
+  data2018clean,
+  data2020clean,
+  data2021clean,
+  data2023clean
+)
+
+# Rename variables
+names(all_data) <- c("Name", "PassportID", "Gender", "DateOfBirth", "Age", "Nationality", "University", "Commission", "YearOfAdmission")
+# Filter data for specified years
+years <- 2016:2023
+all_data <- all_data %>%
+  filter(YearOfAdmission %in% years)
+
+
+# Create Shiny UI
+ui <- dashboardPage(
+  dashboardHeader(title = "QETC Data Analytics Dashboard"),
+  dashboardSidebar(),
+  dashboardBody(
+    tabsetPanel(
+      tabPanel("Overview",
+               dataTableOutput("overview_table"),
+               verbatimTextOutput("summary_stats")
+      ),
+      tabPanel("Enrollment by Year",
+               plotOutput("enrollment_chart"),
+               plotOutput("year_histogram")
+      ),
+      tabPanel("Country Commission Range",
+               plotOutput("country_commission_graph")
+      ),
+      tabPanel("Country of Origin",
+               plotOutput("country_pie_chart")
+      ),
+      tabPanel("University Distribution",
+               plotOutput("university_pie_chart")
+      ),
+      tabPanel("Age Distribution",
+               plotOutput("age_histogram")
+      ),
+      tabPanel("Gender Composition",
+               plotOutput("gender_pie_chart")
+      ),
+      tabPanel("Enrollment Trend",
+               plotOutput("enrollment_trend")
+      )
+    )
+  )
+)
+
+# Create Shiny server logic
+server <- function(input, output) {
+  # Overview table
+  output$overview_table <- renderDataTable({
+    all_data
+  })
+  
+  # Summary statistics
+  output$summary_stats <- renderPrint({
+    summary(all_data)
+  })
+  
+  # Enrollment chart
+  output$enrollment_chart <- renderPlot({
+    enrollment_counts <- all_data %>%
+      group_by(YearOfAdmission) %>%
+      count(Gender)
+    
+    ggplot(enrollment_counts, aes(x = YearOfAdmission, y = n, fill = Gender)) +
+      geom_bar(stat = "identity", position = "stack") +
+      labs(title = "Enrollment by Year", x = "Year of Admission", y = "Number of Students") +
+      theme_minimal()
+  })
+  
+  # Year histogram
+  output$year_histogram <- renderPlot({
+    ggplot(all_data, aes(x = factor(YearOfAdmission))) +
+      geom_bar() +
+      labs(title = "Student Distribution by Year", x = "Year", y = "Number of Students") +
+      theme_minimal()
+  })
+  
+  # Country commission range line graph
+  output$country_commission_graph <- renderPlot({
+    top_countries <- all_data %>%
+      group_by(Nationality) %>%
+      summarise(CommissionRange = max(Commission) - min(Commission)) %>%
+      top_n(10, CommissionRange)
+    
+    top_countries_data <- all_data %>%
+      filter(Nationality %in% top_countries$Nationality)
+    
+    ggplot(top_countries_data, aes(x = YearOfAdmission, y = Commission, color = Nationality, group = Nationality)) +
+      geom_line() +
+      labs(title = "Commission Range by Country", x = "Year of Admission", y = "Commission (RM)") +
+      theme_minimal() +
+      scale_color_brewer(palette = "Set1") +
+      guides(color = guide_legend(title = "Nationality"))
+  })
+  
+  # Country of origin pie chart
+  output$country_pie_chart <- renderPlot({
+    country_counts <- all_data %>%
+      group_by(Nationality) %>%
+      count()
+    
+    ggplot(country_counts, aes(x = "", y = n, fill = Nationality)) +
+      geom_bar(stat = "identity", width = 1) +
+      coord_polar("y", start = 0) +
+      labs(title = "Country of Origin", fill = "Nationality") +
+      theme_minimal() +
+      theme(legend.position = "right") +
+      guides(fill = guide_legend(title = "Nationality"))
+  })
+  
+  # University distribution pie chart
+  output$university_pie_chart <- renderPlot({
+    university_counts <- all_data %>%
+      group_by(Nationality, University) %>%
+      count() %>%
+      group_by(Nationality) %>%
+      slice_max(n, with_ties = FALSE)
+    
+    ggplot(university_counts, aes(x = "", y = n, fill = University)) +
+      geom_bar(stat = "identity", width = 1) +
+      coord_polar("y", start = 0) +
+      labs(title = "University Distribution", fill = "University") +
+      theme_minimal() +
+      theme(legend.position = "right") +
+      guides(fill = guide_legend(title = "University"))
+  })
+  
+  # Age histogram
+  output$age_histogram <- renderPlot({
+    ggplot(all_data, aes(x = Age)) +
+      geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+      labs(title = "Age Distribution", x = "Age", y = "Number of Students") +
+      theme_minimal()
+  })
+  
+  # Gender composition pie chart
+  output$gender_pie_chart <- renderPlot({
+    gender_counts <- all_data %>%
+      group_by(Gender) %>%
+      count()
+    
+    ggplot(gender_counts, aes(x = "", y = n, fill = Gender)) +
+      geom_bar(stat = "identity", width = 1) +
+      coord_polar("y", start = 0) +
+      labs(title = "Gender Composition", fill = "Gender") +
+      theme_minimal() +
+      theme(legend.position = "right") +
+      guides(fill = guide_legend(title = "Gender"))
+  })
+  # Enrollment trend prediction line graph
+  output$enrollment_trend_prediction <- renderPlot({
+    enrollment_grouped <- all_data %>%
+      group_by(YearOfAdmission, Nationality) %>%
+      summarise(EnrollmentCount = n())
+    
+    # Get top 10 countries
+    top_countries <- enrollment_grouped %>%
+      group_by(Nationality) %>%
+      summarise(TotalEnrollment = sum(EnrollmentCount)) %>%
+      arrange(desc(TotalEnrollment)) %>%
+      top_n(10, TotalEnrollment) %>%
+      select(Nationality)
+    
+    # Filter data for top 10 countries
+    top_countries_data <- enrollment_grouped %>%
+      filter(Nationality %in% top_countries$Nationality)
+    
+    # Loop through each top country and predict enrollment for 2024, 2025, and 2026
+    prediction_data <- data.frame()
+    for (country in top_countries_data$Nationality) {
+      country_data <- top_countries_data %>%
+        filter(Nationality == country)
+      
+      enrollment_ts <- ts(country_data$EnrollmentCount, start = c(2018), frequency = 1)
+      enrollment_forecast <- forecast(auto.arima(enrollment_ts), h = 3)  # Forecast for 2024, 2025, and 2026
+      
+      prediction_data <- bind_rows(prediction_data, data.frame(Nationality = country, YearOfAdmission = c(2024, 2025, 2026), EnrollmentCount = enrollment_forecast$mean))
+    }
+    
+    # Plot the enrollment trend predictions
+    ggplot(prediction_data, aes(x = YearOfAdmission, y = EnrollmentCount, color = Nationality, group = Nationality)) +
+      geom_line() +
+      labs(title = "Enrollment Trend Prediction for Top 10 Countries", x = "Year of Admission", y = "Predicted Enrollment") +
+      theme_minimal() +
+      scale_color_brewer(palette = "Set1") +
+      guides(color = guide_legend(title = "Nationality"))
+  })
+  
+}
+
+# Run the Shiny app
+shinyApp(ui, server)
